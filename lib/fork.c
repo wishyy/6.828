@@ -76,8 +76,15 @@ duppage(envid_t envid, unsigned pn)
 
 	// LAB 4: Your code here.
 	//panic("duppage not implemented");
-	
+	uint32_t addr = pn * PGSIZE;
 
+	if((r = sys_page_map(0, (void*)addr, envid, (void*)addr, PTE_COW)) < 0)	{
+		return r;
+	}
+
+	if((r = sys_page_map(0, (void*)addr, 0, (void*)addr, PTE_COW)) < 0)	{
+		return r;
+	}
 	
 	return 0;
 }
@@ -102,7 +109,58 @@ envid_t
 fork(void)
 {
 	// LAB 4: Your code here.
-	panic("fork not implemented");
+	// panic("fork not implemented");
+	envid_t envid;
+	int r;
+	uint32_t addr;
+	extern unsigned char end[];
+	set_pgfault_handler(pgfault);
+	envid = sys_exofork();
+	if(envid < 0)	
+		panic("sys_exofork: %e", envid);
+	if(envid == 0)	{
+		//we're the child
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+
+	//we're the parent
+	//below UTOP, deal with UXSTACKTOP seperately
+	for(addr = UTEXT; addr <= USTACKTOP; addr += PGSIZE)	{
+		pte_t pte = uvpt[addr];
+		if((pte & PTE_W) && (pte & PTE_COW))	{
+			duppage(envid, (void *)addr);
+			continue;
+		}
+		else if(pte & PTE_P)	{
+			sys_page_map(0, (void *)addr, envid, (void *)addr, pte & 0xFFF);
+		}
+	}
+	//UXSTACKTOP
+	if((r = sys_page_alloc(envid, UXSTACKTOP, PTE_P | PTE_U | PTE_W)))	{
+		panic("UXSTACKTOP alloc failed");
+	}
+
+	//kern
+	for(addr = UTOP; addr < KERNBASE; addr += PGSIZE)	{
+		pte_t pte = uvpt[addr];
+		sys_page_map(0, (void *)addr, envid, (void *)addr, pte & 0xFFF);
+	}
+
+	//beyond kern
+	for(addr = KERNBASE; addr < end; addr += PGSIZE)	{
+		pte_t pte = uvpt[addr];
+		if((pte & PTE_W) && (pte & PTE_COW))	{
+			duppage(envid, (void *)addr);
+			continue;
+		}
+		else if(pte & PTE_P)	{
+			sys_page_map(0, (void *)addr, envid, (void *)addr, pte & 0xFFF);
+		}
+	}
+
+	
+
 }
 
 // Challenge!
