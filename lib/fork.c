@@ -76,16 +76,25 @@ duppage(envid_t envid, unsigned pn)
 
 	// LAB 4: Your code here.
 	//panic("duppage not implemented");
-	uint32_t addr = pn * PGSIZE;
+	void *addr = (void *)(pn * PGSIZE);
+	pte_t pte = uvpt[pn];
 
-	if((r = sys_page_map(0, (void*)addr, envid, (void*)addr, PTE_COW)) < 0)	{
-		return r;
+	if(!(pte & PTE_P))	{
+		return -1;
 	}
-
-	if((r = sys_page_map(0, (void*)addr, 0, (void*)addr, PTE_COW)) < 0)	{
-		return r;
+	if(!(pte & PTE_W) && !(pte & PTE_COW))	{
+		if(r = sys_page_map(0, addr, envid, addr)  < 0)	{
+			return r;
+		}
 	}
-	
+	else	{
+	if((r = sys_page_map(0, addr, envid, addr, PTE_U | PTE_COW | PTE_P)) < 0)	{
+		return r;
+		}
+	if((r = sys_page_map(0, addr, 0, addr, PTE_U | PTE_COW | PTE_P)) < 0)	{
+		return r;
+		}
+	}
 	return 0;
 }
 
@@ -125,42 +134,26 @@ fork(void)
 	}
 
 	//we're the parent
-	//below UTOP, deal with UXSTACKTOP seperately
-	for(addr = UTEXT; addr <= USTACKTOP; addr += PGSIZE)	{
-		pte_t pte = uvpt[addr];
-		if((pte & PTE_W) && (pte & PTE_COW))	{
-			duppage(envid, (void *)addr);
-			continue;
-		}
-		else if(pte & PTE_P)	{
-			sys_page_map(0, (void *)addr, envid, (void *)addr, pte & 0xFFF);
+	sys_env_set_pgfault_upcall(envid, _pgfault_upcall);
+
+
+	for(int i = PGNUM(UTEXT); i < PGNUM(UTOP); i += PGSIZE)	{
+		if(i == PGNUM(UXSTACKTOP - PGSIZE))
+			break;
+		if(uvpd[PDX(void *)(i * PGSIZE)] & PTE_P)	{
+			if(duppage(envid, i) < 0)	{
+				panic("duppage failed！");
+			}
 		}
 	}
+
+
 	//UXSTACKTOP
-	if((r = sys_page_alloc(envid, UXSTACKTOP, PTE_P | PTE_U | PTE_W)))	{
+	if((r = sys_page_alloc(envid, UXSTACKTOP - PGSIZE, PTE_P | PTE_U | PTE_W)) < 0)	{
 		panic("UXSTACKTOP alloc failed");
 	}
 
-	//kern
-	for(addr = UTOP; addr < KERNBASE; addr += PGSIZE)	{
-		pte_t pte = uvpt[addr];
-		sys_page_map(0, (void *)addr, envid, (void *)addr, pte & 0xFFF);
-	}
-
-	//beyond kern
-	for(addr = KERNBASE; addr < end; addr += PGSIZE)	{
-		pte_t pte = uvpt[addr];
-		if((pte & PTE_W) && (pte & PTE_COW))	{
-			duppage(envid, (void *)addr);
-			continue;
-		}
-		else if(pte & PTE_P)	{
-			sys_page_map(0, (void *)addr, envid, (void *)addr, pte & 0xFFF);
-		}
-	}
-
-	
-
+	return envid;
 }
 
 // Challenge!
