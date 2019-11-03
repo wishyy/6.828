@@ -7,6 +7,8 @@
 // It is one of the bits explicitly allocated to user processes (PTE_AVAIL).
 #define PTE_COW		0x800
 
+extern void _pgfault_upcall(void);
+
 //
 // Custom page fault handler - if faulting page is copy-on-write,
 // map in our own private writable copy.
@@ -79,20 +81,18 @@ duppage(envid_t envid, unsigned pn)
 	void *addr = (void *)(pn * PGSIZE);
 	pte_t pte = uvpt[pn];
 
-	if(!(pte & PTE_P))	{
-		return -1;
-	}
+	
 	if(!(pte & PTE_W) && !(pte & PTE_COW))	{
-		if(r = sys_page_map(0, addr, envid, addr)  < 0)	{
-			return r;
+		if((r = sys_page_map(0, addr, envid, addr, PTE_U | PTE_P))  < 0)	{
+			panic("duppage: page map failed %e", r);
 		}
 	}
 	else	{
 	if((r = sys_page_map(0, addr, envid, addr, PTE_U | PTE_COW | PTE_P)) < 0)	{
-		return r;
+		panic("duppage: page map failed %e", r);
 		}
 	if((r = sys_page_map(0, addr, 0, addr, PTE_U | PTE_COW | PTE_P)) < 0)	{
-		return r;
+		panic("duppage: page map failed %e", r);
 		}
 	}
 	return 0;
@@ -122,7 +122,7 @@ fork(void)
 	envid_t envid;
 	int r;
 	uint32_t addr;
-	extern unsigned char end[];
+
 	set_pgfault_handler(pgfault);
 	envid = sys_exofork();
 	if(envid < 0)	
@@ -135,23 +135,23 @@ fork(void)
 
 	//we're the parent
 	sys_env_set_pgfault_upcall(envid, _pgfault_upcall);
-
-
-	for(int i = PGNUM(UTEXT); i < PGNUM(UTOP); i += PGSIZE)	{
+	//normal stack
+	for(int i = PGNUM(UTEXT); i < PGNUM(UTOP); i++)	{
 		if(i == PGNUM(UXSTACKTOP - PGSIZE))
 			break;
-		if(uvpd[PDX(void *)(i * PGSIZE)] & PTE_P)	{
-			if(duppage(envid, i) < 0)	{
-				panic("duppage failed！");
-			}
+		//double check.first check page directory PTE_P,then page table PTE_P
+		if(!(uvpd[PDX((void *)(i * PGSIZE))] & PTE_P) || !(uvpt[i] & PTE_P))
+			continue;
+		if(duppage(envid, i) < 0)	{
+			panic("duppage failed！");
 		}
 	}
-
-
 	//UXSTACKTOP
-	if((r = sys_page_alloc(envid, UXSTACKTOP - PGSIZE, PTE_P | PTE_U | PTE_W)) < 0)	{
+	if((r = sys_page_alloc(envid, (void *)(UXSTACKTOP - PGSIZE), PTE_P | PTE_U | PTE_W)) < 0)	{
 		panic("UXSTACKTOP alloc failed");
 	}
+
+	sys_env_set_status(envid, ENV_RUNNABLE);
 
 	return envid;
 }
