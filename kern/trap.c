@@ -93,6 +93,7 @@ trap_init(void)
 
 	void handler48();
 
+
 	SETGATE(idt[0], 0, GD_KT, handler0, 0);
 	SETGATE(idt[1], 0, GD_KT, handler1, 0);
 	SETGATE(idt[2], 0, GD_KT, handler2, 0);
@@ -113,6 +114,40 @@ trap_init(void)
 	SETGATE(idt[19], 0, GD_KT, handler19, 0);
 
 	SETGATE(idt[48], 0, GD_KT, handler48, 3);
+	
+	// IRQs
+	void IRQ_0();
+	SETGATE(idt[IRQ_OFFSET + 0], 0, GD_KT, IRQ_0, 0);
+	void IRQ_1();
+	SETGATE(idt[IRQ_OFFSET + 1], 0, GD_KT, IRQ_1, 0);
+	void IRQ_2();
+	SETGATE(idt[IRQ_OFFSET + 2], 0, GD_KT, IRQ_2, 0);
+	void IRQ_3();
+	SETGATE(idt[IRQ_OFFSET + 3], 0, GD_KT, IRQ_3, 0);
+	void IRQ_4();
+	SETGATE(idt[IRQ_OFFSET + 4], 0, GD_KT, IRQ_4, 0);
+	void IRQ_5();
+	SETGATE(idt[IRQ_OFFSET + 5], 0, GD_KT, IRQ_5, 0);
+	void IRQ_6();
+	SETGATE(idt[IRQ_OFFSET + 6], 0, GD_KT, IRQ_6, 0);
+	void IRQ_7();
+	SETGATE(idt[IRQ_OFFSET + 7], 0, GD_KT, IRQ_7, 0);
+	void IRQ_8();
+	SETGATE(idt[IRQ_OFFSET + 8], 0, GD_KT, IRQ_8, 0);
+	void IRQ_9();
+	SETGATE(idt[IRQ_OFFSET + 9], 0, GD_KT, IRQ_9, 0);
+	void IRQ_10();
+	SETGATE(idt[IRQ_OFFSET + 10], 0, GD_KT, IRQ_10, 0);
+	void IRQ_11();
+	SETGATE(idt[IRQ_OFFSET + 11], 0, GD_KT, IRQ_11, 0);
+	void IRQ_12();
+	SETGATE(idt[IRQ_OFFSET + 12], 0, GD_KT, IRQ_12, 0);
+	void IRQ_13();
+	SETGATE(idt[IRQ_OFFSET + 13], 0, GD_KT, IRQ_13, 0);
+	void IRQ_14();
+	SETGATE(idt[IRQ_OFFSET + 14], 0, GD_KT, IRQ_14, 0);
+	void IRQ_15();
+	SETGATE(idt[IRQ_OFFSET + 15], 0, GD_KT, IRQ_15, 0);
 	
 
 	// Per-CPU setup 
