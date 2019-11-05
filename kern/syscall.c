@@ -333,7 +333,66 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+	// panic("sys_ipc_try_send not implemented");
+	struct Env *receiver = NULL;
+
+	if((uint32_t)(srcva) < UTOP)	{
+		//not page-aligned
+		if((uint32_t)srcva % PGSIZE != 0)	{
+			return -E_INVAL;
+		}
+		//inappropriate
+		int check_UP = PTE_P | PTE_U;
+		int check_other = ~(PTE_P | PTE_U | PTE_AVAIL | PTE_W);
+		if((perm & check_UP) != check_UP || (perm & check_other) != 0)	{
+			return -E_INVAL;
+		}
+		//srcva not mapped
+		pte_t *pte = pgdir_walk(curenv->env_pgdir, srcva, 0);
+		if(!pte){
+			return -E_INVAL;
+		}
+		//page read-only
+		if(!(*pte & PTE_W))	{
+			return -E_INVAL;
+		}
+	}
+
+	if(envid2env(envid, &receiver, 0) < 0)	{
+		return -E_BAD_ENV;
+	}
+
+	if(receiver->env_status != ENV_NOT_RUNNABLE || receiver->env_ipc_recving == 0)	{
+		return -E_IPC_NOT_RECV;
+	}
+
+	receiver->env_ipc_recving = false;
+	receiver->env_ipc_from = curenv->env_id;
+	receiver->env_ipc_value = value;
+	//map page
+	if(receiver->env_ipc_dstva)	{
+		if((uint32_t)srcva < UTOP)	{
+			if(!pgdir_walk(receiver->env_pgdir, receiver->env_ipc_dstva, 0))	{
+				if(sys_page_map(0, srcva, envid, receiver->env_ipc_dstva, perm) < 0)	{
+					return -E_NO_MEM;
+				}
+				receiver->env_ipc_perm = perm;
+			}
+			else	{
+				sys_page_unmap(envid, receiver->env_ipc_dstva);
+				if(sys_page_map(0, srcva, envid, receiver->env_ipc_dstva, perm) < 0)	{
+					return -E_NO_MEM;
+				}
+				receiver->env_ipc_perm = perm;
+			}
+		}
+	}
+	else	{
+		receiver->env_ipc_perm = 0;
+	}
+	receiver->env_status = ENV_RUNNABLE;
+
+	return 0;
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -351,7 +410,16 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
+	// panic("sys_ipc_recv not implemented");
+	if((uint32_t)dstva % PGSIZE != 0)	{
+		return -E_INVAL;
+	}
+	
+	curenv->env_ipc_recving = true;
+	curenv->env_ipc_dstva = (uint32_t)dstva < UTOP ? dstva : NULL;
+	curenv->env_status = ENV_NOT_RUNNABLE;
+
+	sched_yield();
 	return 0;
 }
 
