@@ -27,7 +27,8 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	// LAB 4: Your code here.
-	if((err & FEC_WR) == 0 || (uvpt[PGNUM((uint32_t)addr)] & PTE_COW) < 0)	{
+	if((err & FEC_WR) == 0 || (uvpt[PGNUM((uint32_t)addr)] & PTE_COW) == 0)	{
+		//cprintf("[%08x] user fault va %08x ip %08x\n", sys_getenvid(), addr, utf->utf_eip);
 		panic("pgfault : page not writable or not COW");
 	}
 
@@ -45,17 +46,14 @@ pgfault(struct UTrapframe *utf)
 	addr = ROUNDDOWN(addr, PGSIZE);
 
 	memmove(PFTEMP, addr, PGSIZE);
-	if((r = sys_page_unmap(0, addr)) < 0)	{
+	if((r = sys_page_unmap(0, addr)) < 0)	
 		panic("pgfault : first sys_page_unmap failed %e", r);
-	}
 
-	if((r = sys_page_map(0, PFTEMP, 0, addr, PTE_U | PTE_P | PTE_W)) < 0)	{
+	if((r = sys_page_map(0, PFTEMP, 0, addr, PTE_U | PTE_P | PTE_W)) < 0)	
 		panic("pgfault : sys_page_map failed %e", r);
-	}
 
-	if((r = sys_page_unmap(0, PFTEMP)) < 0)		{
+	if((r = sys_page_unmap(0, PFTEMP)) < 0)		
 		panic("pgfault : second sys_page_unmap failed %e", r);
-	}
 
 	// panic("pgfault not implemented");
 }
@@ -88,12 +86,10 @@ duppage(envid_t envid, unsigned pn)
 		}
 	}
 	else	{
-	if((r = sys_page_map(0, addr, envid, addr, PTE_U | PTE_COW | PTE_P)) < 0)	{
+	if((r = sys_page_map(0, addr, envid, addr, PTE_U | PTE_COW | PTE_P)) < 0)
 		panic("duppage: page map failed %e", r);
-		}
-	if((r = sys_page_map(0, addr, 0, addr, PTE_U | PTE_COW | PTE_P)) < 0)	{
+	if((r = sys_page_map(0, addr, 0, addr, PTE_U | PTE_COW | PTE_P)) < 0)	
 		panic("duppage: page map failed %e", r);
-		}
 	}
 	return 0;
 }
